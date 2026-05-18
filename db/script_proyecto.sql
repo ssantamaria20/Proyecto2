@@ -24,3 +24,8 @@ CREATE TABLE nombramientos (
     fecha_inicio DATE DEFAULT CURRENT_DATE,
     activo BOOLEAN DEFAULT TRUE 
 );
+--Ajuste tabla issue 9
+-- Añadir la columna sector y estado a la tabla de nombramientos
+ALTER TABLE nombramientos 
+ADD COLUMN sector VARCHAR(150),
+ADD COLUMN estado VARCHAR(50) DEFAULT 'Vigente';
