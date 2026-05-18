@@ -30,20 +30,19 @@
     </form>
 
     <script>
-        //CONFIGURACION DE CREDENCIALES 
+        // 1. CONFIGURACIÓN DE CREDENCIALES
         const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
         
     
         const SUPABASE_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
 
-        // Inicializar la conexión con Supabase
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+        const supabaseCliente = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // 2. CAPTURAR EL EVENTO DEL FORMULARIO
         document.getElementById('formAsambleista').addEventListener('submit', async (e) => {
-            e.preventDefault(); // Evita que la página se recargue
+            e.preventDefault(); 
 
-            // Obtener los valores que escribiste en las casillas
             const cedula = document.getElementById('cedula').value;
             const nombre = document.getElementById('nombre').value;
             const primer_apellido = document.getElementById('apellido1').value;
@@ -51,8 +50,8 @@
             const correo = document.getElementById('correo').value;
 
             try {
-                // Enviar los datos directamente a la tabla asambleistas en la nube
-                const { data, error } = await supabase
+                // Usamos el nuevo nombre del cliente
+                const { data, error } = await supabaseCliente
                     .from('asambleistas')
                     .insert([
                         { 
@@ -66,8 +65,8 @@
 
                 if (error) throw error;
 
-                alert("Asambleista registrado");
-                document.getElementById('formAsambleista').reset(); // Limpia las casillas
+                alert("¡Asambleista registrado");
+                document.getElementById('formAsambleista').reset(); 
 
             } catch (error) {
                 console.error(error);
