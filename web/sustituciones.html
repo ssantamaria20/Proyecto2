@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anulaciones y Sustituciones</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+    <h1>Gestión de Anulaciones y Sustituciones</h1>
+
+    <h2>1. Buscador / Verificación de Folios</h2>
+    <p>Escriba un número de folio.</p>
+    <input type="text" id="buscarFolio" placeholder="Ej: DAIR-101-2026">
+    <button id="btnVerificar">Verificar Folio</button>
+
+    <div id="resultadoVerificacion" style="margin-top: 15px; padding: 15px; border: 1px solid #ccc; width: 50%; display: none;">
+        </div>
+
+    <hr>
+
+    <h2>Emitir una Certificación de Sustitución</h2>
+    <form id="formSustitucion">
+        <label>Nuevo Número de Folio a emitir:</label><br>
+        <input type="text" id="nuevoFolio" placeholder="Ej: DAIR-103-2026" required><br><br>
+
+        <label>Cédula del Asambleísta:</label><br>
+        <input type="text" id="cedula" required><br><br>
+
+        <label>Puesto:</label><br>
+        <input type="text" id="puesto" required><br><br>
+
+        <label><b>Folio Anterior que es Sustituido:</b></label><br>
+        <input type="text" id="folioSustituido" placeholder="Ej: DAIR-101-2026"><br><br>
+
+        <button type="submit">Emitir Certificación</button>
+    </form>
+
+    <div id="modalAnulacion" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+        <div style="background: white; margin: 15% auto; padding: 20px; width: 40%; border-radius: 5px;">
+            <h3>Alerta de Anulación Legal</h3>
+            <p>Está a punto de anular permanentemente el folio: <strong id="folioAnularTexto"></strong></p>
+            
+            <label><b>Justificación / Motivo de Anulación:</b></label><br>
+            <textarea id="motivoAnulacion" rows="4" style="width: 100%;" placeholder="Describa el error de emisión..." required></textarea><br><br>
+            
+            <button id="btnConfirmarAnulacion" style="background: red; color: white;">Confirmar Anulación Permanente</button>
+            <button id="btnCancelarModal">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
+        const SUPABASE_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
+        const supabaseCliente = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let folioSeleccionadoParaAnular = "";
+
+        document.getElementById('btnVerificar').addEventListener('click', async () => {
+            const folio = document.getElementById('buscarFolio').value.trim();
+            const panel = document.getElementById('resultadoVerificacion');
+            
+            if(!folio) return alert("Ingrese un número de folio");
+
+            panel.style.display = "block";
+            panel.innerHTML = "Buscando en el registro legal...";
+
+            try {
+                const { data, error } = await supabaseCliente
+                    .from('certificaciones')
+                    .select('*')
+                    .eq('num_folio', folio)
+                    .maybeSingle();
+
+                if (error) throw error;
+
+                if(!data) {
+                    panel.innerHTML = "<b style='color:orange;'>El folio no existe en los registros de la AIR.</b>";
+                    return;
+                }
+
+                if(data.estado === 'Anulado') {
+                    panel.innerHTML = `
+                        <div style="background: #ffdddd; border-left: 6px solid red; padding: 10px;">
+                            <h3 style="color: red; margin: 0;"> DOCUMENTO INVÁLIDO</h3>
+                            <p>Este folio fue cancelado y no posee validez jurídica.</p>
+                            <p><b>Motivo de Anulación:</b> ${data.motivo_anulacion}</p>
+                        </div>
+                    `;
+                } else {
+                    let textoSustitucion = "";
+                    if(data.sustituye_a_folio) {
+                        textoSustitucion = `<p style="color: blue; font-weight: bold;">ℹ️ Este documento sustituye al folio ${data.sustituye_a_folio} por error en la emisión original.</p>`;
+                    }
+
+                    panel.innerHTML = `
+                        <div style="background: #ddffdd; border-left: 6px solid green; padding: 10px;">
+                            <h3 style="color: green; margin: 0;">✅ FOLIO VIGENTE</h3>
+                            <p><b>Folio:</b> ${data.num_folio}</p>
+                            <p><b>Asambleísta:</b> ${data.cedula_asambleista} - <b>Puesto:</b> ${data.puesto_assigned || data.puesto_asignado}</p>
+                            ${textoSustitucion}
+                            <hr>
+                            <button onclick="abrirModalAnulacion('${data.num_folio}')">Anular este Folio</button>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                panel.innerHTML = "Error: " + error.message;
+            }
+        });
+
+        function abrirModalAnulacion(folio) {
+            folioSeleccionadoParaAnular = folio;
+            document.getElementById('folioAnularTexto').innerText = folio;
+            document.getElementById('modalAnulacion').style.display = "block";
+        }
+
+        document.getElementById('btnCancelarModal').addEventListener('click', () => {
+            document.getElementById('modalAnulacion').style.display = "none";
+            document.getElementById('motivoAnulacion').value = "";
+        });
+
+        document.getElementById('btnConfirmarAnulacion').addEventListener('click', async () => {
+            const motivo = document.getElementById('motivoAnulacion').value.trim();
+            if(!motivo) return alert("El motivo de la anulación es obligatorio por ley.");
+
+            try {
+                const { error } = await supabaseCliente
+                    .from('certificaciones')
+                    .update({ estado: 'Anulado', motivo_anulacion: motivo })
+                    .eq('num_folio', folioSeleccionadoParaAnular);
+
+                if (error) throw error;
+
+                alert("Folio anulado con éxito en el sistema central.");
+                document.getElementById('modalAnulacion').style.display = "none";
+                document.getElementById('motivoAnulacion').value = "";
+                document.getElementById('btnVerificar').click(); 
+
+            } catch (error) {
+                alert("Error al anular: " + error.message);
+            }
+        });
+
+        document.getElementById('formSustitucion').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const nuevo = document.getElementById('nuevoFolio').value.trim();
+            const cedula = document.getElementById('cedula').value.trim();
+            const puesto = document.getElementById('puesto').value.trim();
+            const sustituyeA = document.getElementById('folioSustituido').value.trim();
+
+            try {
+                const { error } = await supabaseCliente
+                    .from('certificaciones')
+                    .insert([{
+                        num_folio: nuevo,
+                        cedula_asambleista: cedula,
+                        puesto_asignado: puesto,
+                        sustituye_a_folio: sustituyeA || null,
+                        estado: 'Activo'
+                    }]);
+
+                if (error) throw error;
+
+                alert("Nueva certificación emitida con éxito.");
+                document.getElementById('formSustitucion').reset();
+            } catch (error) {
+                alert("Error al emitir: " + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
