@@ -16,7 +16,7 @@ CREATE TABLE asambleistas (
     correo VARCHAR(255) UNIQUE NOT NULL
 );
 
--- Creacion de la tabla de Nombramientos con control de vigencia (Issue 15)
+-- Creacion de la tabla de Nombramientos(Issue 15), actualmente en desuso.
 CREATE TABLE nombramientos (
     id_nombramiento SERIAL PRIMARY KEY,
     cedula_asambleista VARCHAR(50) REFERENCES asambleistas(cedula) ON DELETE CASCADE,
@@ -80,3 +80,21 @@ FOR EACH ROW
 EXECUTE FUNCTION procesar_reforma_reglamento();
 
 -- FIN DE AJUSTE ISSUE 10
+
+-- AJUSTES ISSUE 15
+
+CREATE TABLE certificaciones (
+    id_certificacion SERIAL PRIMARY KEY,
+    num_folio VARCHAR(50) UNIQUE NOT NULL,     
+    cedula_asambleista VARCHAR(50) NOT NULL,
+    puesto_asignado VARCHAR(100) NOT NULL,
+    estado VARCHAR(20) DEFAULT 'Activo',        
+    motivo_anulacion TEXT,                    
+    sustituye_a_folio VARCHAR(50),             
+    fecha_emision DATE DEFAULT CURRENT_DATE
+);
+
+INSERT INTO certificaciones (num_folio, cedula_asambleista, puesto_asignado, estado)
+VALUES 
+('DAIR-101-2026', '11111111', 'Presidente', 'Activo'),
+('DAIR-102-2026', '22222222', 'Secretario', 'Activo');
