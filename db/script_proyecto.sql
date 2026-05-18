@@ -16,14 +16,6 @@ CREATE TABLE asambleistas (
     correo VARCHAR(255) UNIQUE NOT NULL
 );
 
--- Creacion de la tabla de Nombramientos(Issue 15), actualmente en desuso.
-CREATE TABLE nombramientos (
-    id_nombramiento SERIAL PRIMARY KEY,
-    cedula_asambleista VARCHAR(50) REFERENCES asambleistas(cedula) ON DELETE CASCADE,
-    puesto VARCHAR(150) NOT NULL,
-    fecha_inicio DATE DEFAULT CURRENT_DATE,
-    activo BOOLEAN DEFAULT TRUE 
-);
 --Ajuste tabla issue 9
 -- Añadir la columna sector y estado a la tabla de nombramientos
 ALTER TABLE nombramientos 
