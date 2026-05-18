@@ -3,77 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Asamblea</title>
+    <title> Gestión de Asambleístas</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-    <h1>Registro de Asambleístas</h1>
+    <h1> Gestión de Asambleístas y Nombramientos</h1>
     
-    <form id="formAsambleista">
-        <label>Cédula:</label><br>
+    <h2>1. Formulario de Registro Asambleista y Nombramiento Inicial</h2>
+    <form id="formRegistroCompleto">
+        <h3>Datos Personales (Permanentes)</h3>
+        <label>Cédula de Identidad (Evita duplicados):</label><br>
         <input type="text" id="cedula" required><br><br>
 
-        <label>Nombre:</label><br>
-        <input type="text" id="nombre" required><br><br>
-
-        <label>Primer Apellido:</label><br>
-        <input type="text" id="apellido1" required><br><br>
-
-        <label>Segundo Apellido:</label><br>
-        <input type="text" id="apellido2"><br><br>
+        <label>Nombre Completo:</label><br>
+        <input type="text" id="nombreCompleto" required><br><br>
 
         <label>Correo Electrónico:</label><br>
         <input type="email" id="correo" required><br><br>
 
-        <button type="submit">Registrar Asambleísta</button>
+        <h3>Datos del Nombramiento Inicial</h3>
+        <label>Puesto / Cargo:</label><br>
+        <input type="text" id="puesto" placeholder="Ej: Diputado, Presidente" required><br><br>
+
+        <label>Sector de Representación:</label><br>
+        <input type="text" id="sector" placeholder="Ej: Sector Agrícola, Provincia X" required><br><br>
+
+        <button type="submit">Guardar Integrante y Nombramiento</button>
     </form>
 
-    <script>
-        // 1. CONFIGURACIÓN DE CREDENCIALES
-        const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
-        
+    <hr>
+
+    <h2>2.Visualizar Integrantes Existentes</h2>
+    <button id="btnCargar"> Cargar / Actualizar Lista de Asambleístas</button>
     
+    <table border="1" style="margin-top: 15px; width: 100%; text-align: left;">
+        <thead>
+            <tr>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <th>Correo</th>
+                <th>Puesto Actual</th>
+                <th>Sector</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="tablaAsambleistas">
+            <tr>
+                <td colspan="6">Haga clic en Cargar para consultar los datos...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        // CONFIGURACIÓN DE CREDENCIALES 
+        const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
         const SUPABASE_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
 
-    
         const supabaseCliente = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // 2. CAPTURAR EL EVENTO DEL FORMULARIO
-        document.getElementById('formAsambleista').addEventListener('submit', async (e) => {
-            e.preventDefault(); 
+        // --- ENVIAR DATOS 
+        document.getElementById('formRegistroCompleto').addEventListener('submit', async (e) => {
+            e.preventDefault();
 
             const cedula = document.getElementById('cedula').value;
-            const nombre = document.getElementById('nombre').value;
-            const primer_apellido = document.getElementById('apellido1').value;
-            const segundo_apellido = document.getElementById('apellido2').value;
+            const nombreCompleto = document.getElementById('nombreCompleto').value;
             const correo = document.getElementById('correo').value;
+            const puesto = document.getElementById('puesto').value;
+            const sector = document.getElementById('sector').value;
 
             try {
-                // Usamos el nuevo nombre del cliente
-                const { data, error } = await supabaseCliente
+                // Validar si la cédula ya existe
+                const { data: existe } = await supabaseCliente
                     .from('asambleistas')
-                    .insert([
-                        { 
-                            cedula: cedula, 
-                            nombre: nombre, 
-                            primer_apellido: primer_apellido, 
-                            segundo_apellido: segundo_apellido || null, 
-                            correo: correo 
-                        }
-                    ]);
+                    .select('cedula')
+                    .eq('cedula', cedula)
+                    .maybeSingle();
 
-                if (error) throw error;
+                // Si no existe el asambleísta, lo creamos en su tabla permanente
+                if (!existe) {
+                    const { error: errAsam } = await supabaseCliente
+                        .from('asambleistas')
+                        .insert([{ cedula: cedula, nombre: nombreCompleto, primer_apellido: '', correo: correo }]);
+                    if (errAsam) throw errAsam;
+                }
 
-                alert("¡Asambleista registrado");
-                document.getElementById('formAsambleista').reset(); 
+
+                await supabaseCliente
+                    .from('nombramientos')
+                    .update({ activo: false, estado: 'Finalizado' })
+                    .eq('puesto', puesto)
+                    .eq('activo', true);
+
+                const { error: errNom } = await supabaseCliente
+                    .from('nombramientos')
+                    .insert([{ 
+                        cedula_asambleista: cedula, 
+                        puesto: puesto, 
+                        sector: sector, 
+                        estado: 'Vigente',
+                        activo: true 
+                    }]);
+
+                if (errNom) throw errNom;
+
+                alert("¡Registro e historial guardados con éxito!");
+                document.getElementById('formRegistroCompleto').reset();
+                cargarAsambleistas(); 
 
             } catch (error) {
                 console.error(error);
-                alert("Hubo un error al guardar: " + error.message);
+                alert("Error al procesar: " + error.message);
             }
         });
-    </script>
 
+        async function cargarAsambleistas() {
+            const tbody = document.getElementById('tablaAsambleistas');
+            tbody.innerHTML = "<tr><td colspan='6'>Cargando integrantes...</td></tr>";
+            try {
+                const { data, error } = await supabaseCliente
+                    .from('nombramientos')
+                    .select(`
+                        puesto, sector, estado,
+                        asambleistas (cedula, nombre, correo)
+                    `)
+                    .eq('activo', true);
+
+                if (error) throw error;
+
+                tbody.innerHTML = ""; 
+
+                if(data.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='6'>No hay asambleístas activos registrados.</td></tr>";
+                    return;
+                }
+
+                data.forEach(item => {
+                    const fila = document.createElement('tr');
+                    fila.innerHTML = `
+                        <td>${item.asambleistas.cedula}</td>
+                        <td>${item.asambleistas.nombre}</td>
+                        <td>${item.asambleistas.correo}</td>
+                        <td>${item.puesto}</td>
+                        <td>${item.sector}</td>
+                        <td><strong>${item.estado}</strong></td>
+                    `;
+                    tbody.appendChild(fila);
+                });
+
+            } catch (error) {
+                console.error(error);
+                tbody.innerHTML = `<tr><td colspan='6' style='color:red;'>Error al cargar: ${error.message}</td></tr>`;
+            }
+        }
+        document.getElementById('btnCargar').addEventListener('click', cargarAsambleistas);
+    </script>
 </body>
 </html>
