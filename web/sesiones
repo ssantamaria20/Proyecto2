@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comisiones, Sesiones y Asistencia</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<h1>Módulo de Comisiones, Sesiones y Asistencia</h1>
+
+<!-- ===================== ISSUE 11: COMISIONES ===================== -->
+<h2>1. Crear Comisión</h2>
+<form id="formComision">
+    <label>Nombre de la Comisión:</label><br>
+    <input type="text" id="nombreComision" placeholder="Ej: Comisión de Reglamentos" required><br><br>
+
+    <label>Objeto de la Comisión (según acta de creación):</label><br>
+    <textarea id="objetoComision" rows="3" placeholder="Describa el objeto formal de la comisión..." required></textarea><br><br>
+
+    <button type="submit">Crear Comisión</button>
+</form>
+
+<hr>
+
+<!-- ===================== ISSUE 11: ASIGNAR INTEGRANTES ===================== -->
+<h2>2. Asignar Asambleístas a una Comisión</h2>
+<form id="formAsignarIntegrante">
+    <label>Seleccionar Comisión:</label><br>
+    <select id="selectComision" required>
+        <option value="">-- Cargando comisiones... --</option>
+    </select><br><br>
+
+    <label>Cédula del Asambleísta a Asignar:</label><br>
+    <input type="text" id="cedulaIntegrante" placeholder="Ej: 112340567" required><br><br>
+
+    <button type="submit">Asignar a Comisión</button>
+</form>
+
+<hr>
+
+<!-- ===================== ISSUE 11 + 12: SESIONES ===================== -->
+<h2>3. Crear Sesión</h2>
+<form id="formSesion">
+    <label>Título de la Sesión:</label><br>
+    <input type="text" id="tituloSesion" placeholder="Ej: Sesión Ordinaria #12 - Junio 2026" required><br><br>
+
+    <label>Fecha de la Sesión:</label><br>
+    <input type="date" id="fechaSesion" required><br><br>
+
+    <button type="submit">Crear Sesión</button>
+</form>
+
+<hr>
+
+<!-- ===================== ISSUE 12: PASAR LISTA ===================== -->
+<h2>4. Pasar Lista (Verificar Quórum)</h2>
+<p>Seleccione una sesión para ver los asambleístas nombrados y registrar su asistencia.</p>
+
+<label>Sesión:</label><br>
+<select id="selectSesionAsistencia">
+    <option value="">-- Cargando sesiones... --</option>
+</select><br><br>
+<button id="btnPasarLista">📋 Pasar Lista</button>
+
+<div id="panelAsistencia" style="display:none; margin-top:15px; padding:15px; border:1px solid #ccc; width:60%;">
+    <h3 id="tituloSesionActual"></h3>
+    <div id="listaAsistencia"></div>
+    <br>
+    <button id="btnGuardarAsistencia" style="background:green; color:white;">💾 Guardar Asistencia</button>
+    <div id="resultadoQuorum" style="margin-top:10px; font-weight:bold; font-size:1.2em;"></div>
+</div>
+
+<hr>
+
+<!-- ===================== ISSUE 12: VOTACIONES ===================== -->
+<h2>5. Registrar Votación Nominal</h2>
+<form id="formVotacion">
+    <label>Sesión donde ocurre la votación:</label><br>
+    <select id="selectSesionVotacion" required>
+        <option value="">-- Cargando sesiones... --</option>
+    </select><br><br>
+
+    <label>Descripción del punto a votar:</label><br>
+    <textarea id="descVotacion" rows="2" placeholder="Ej: Aprobación del Reglamento de Comisiones..." required></textarea><br><br>
+
+    <button type="submit">Iniciar Votación Nominal</button>
+</form>
+
+<!-- Panel de votación activa -->
+<div id="panelVotacion" style="display:none; margin-top:15px; padding:15px; border:2px solid #333; width:65%;">
+    <h3>Votación en Curso: <span id="descVotacionActual"></span></h3>
+    <div id="listaVotos"></div>
+    <br>
+    <button id="btnRegistrarVotos" style="background:navy; color:white;">✅ Registrar Votos y Ver Resultado</button>
+    <div id="resultadoVotacion" style="margin-top:15px; padding:10px; font-size:1.1em; border-left:5px solid gray;"></div>
+</div>
+
+<script>
+    const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
+    const supabaseCliente = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let votacionActivaId = null;
+    let sesionActivaId   = null;
+
+    // ---- CARGA INICIAL DE SELECTORES ----
+    async function cargarComisiones() {
+        const { data } = await supabaseCliente.from('comisiones').select('id_comision, nombre').eq('estado','Activa');
+        const sel = document.getElementById('selectComision');
+        sel.innerHTML = '<option value="">-- Seleccione --</option>';
+        (data || []).forEach(c => {
+            sel.innerHTML += `<option value="${c.id_comision}">${c.nombre}</option>`;
+        });
+    }
+
+    async function cargarSesiones() {
+        const { data } = await supabaseCliente.from('sesiones').select('id_sesion, titulo, fecha_sesion').order('fecha_sesion', { ascending: false });
+        ['selectSesionAsistencia','selectSesionVotacion'].forEach(id => {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="">-- Seleccione --</option>';
+            (data || []).forEach(s => {
+                sel.innerHTML += `<option value="${s.id_sesion}">[${s.fecha_sesion}] ${s.titulo}</option>`;
+            });
+        });
+    }
+
+    // ---- ISSUE 11: CREAR COMISIÓN ----
+    document.getElementById('formComision').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nombre = document.getElementById('nombreComision').value.trim();
+        const objeto = document.getElementById('objetoComision').value.trim();
+
+        const { error } = await supabaseCliente.from('comisiones').insert([{ nombre, objeto }]);
+        if (error) return alert("Error: " + error.message);
+
+        alert("¡Comisión creada con éxito!");
+        document.getElementById('formComision').reset();
+        cargarComisiones();
+    });
+
+    // ---- ISSUE 11: ASIGNAR INTEGRANTE ----
+    document.getElementById('formAsignarIntegrante').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id_comision = document.getElementById('selectComision').value;
+        const cedula = document.getElementById('cedulaIntegrante').value.trim();
+
+        if (!id_comision) return alert("Seleccione una comisión.");
+
+        const { error } = await supabaseCliente.from('comision_integrantes').insert([{
+            id_comision: parseInt(id_comision),
+            cedula_asambleista: cedula
+        }]);
+        if (error) return alert("Error: " + error.message);
+        alert("Integrante asignado con éxito.");
+        document.getElementById('formAsignarIntegrante').reset();
+    });
+
+    // ---- ISSUE 11: CREAR SESIÓN ----
+    document.getElementById('formSesion').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const titulo = document.getElementById('tituloSesion').value.trim();
+        const fecha = document.getElementById('fechaSesion').value;
+
+        const { error } = await supabaseCliente.from('sesiones').insert([{ titulo, fecha_sesion: fecha }]);
+        if (error) return alert("Error: " + error.message);
+
+        alert("Sesión creada con éxito.");
+        document.getElementById('formSesion').reset();
+        cargarSesiones();
+    });
+
+    // ---- ISSUE 12: PASAR LISTA ----
+    document.getElementById('btnPasarLista').addEventListener('click', async () => {
+        const id_sesion = document.getElementById('selectSesionAsistencia').value;
+        if (!id_sesion) return alert("Seleccione una sesión.");
+        sesionActivaId = id_sesion;
+
+        const sesionTexto = document.getElementById('selectSesionAsistencia').options[
+            document.getElementById('selectSesionAsistencia').selectedIndex
+        ].text;
+        document.getElementById('tituloSesionActual').innerText = sesionTexto;
+
+        // Cargar asambleístas con nombramiento VIGENTE
+        const { data: nombrados, error } = await supabaseCliente
+            .from('nombramientos')
+            .select('cedula_asambleista, puesto, asambleistas(nombre)')
+            .eq('activo', true);
+
+        if (error) return alert("Error al cargar nombramientos: " + error.message);
+
+        const lista = document.getElementById('listaAsistencia');
+        lista.innerHTML = "";
+
+        if (!nombrados || nombrados.length === 0) {
+            lista.innerHTML = "<p>No hay asambleístas nombrados vigentes.</p>";
+            document.getElementById('panelAsistencia').style.display = "block";
+            return;
+        }
+
+        nombrados.forEach(n => {
+            const cedula = n.cedula_asambleista;
+            const nombre = n.asambleistas?.nombre || cedula;
+            lista.innerHTML += `
+                <div style="margin-bottom:8px;">
+                    <strong>${nombre}</strong> (${n.puesto})
+                    <label><input type="radio" name="asist_${cedula}" value="Presente"> Presente</label>
+                    <label><input type="radio" name="asist_${cedula}" value="Ausente" checked> Ausente</label>
+                </div>
+            `;
+        });
+
+        document.getElementById('panelAsistencia').style.display = "block";
+        document.getElementById('resultadoQuorum').innerText = "";
+    });
+
+    // ---- ISSUE 12: GUARDAR ASISTENCIA Y MOSTRAR QUÓRUM ----
+    document.getElementById('btnGuardarAsistencia').addEventListener('click', async () => {
+        const radios = document.querySelectorAll('#listaAsistencia input[type=radio]:checked');
+        const registros = [];
+        let presentes = 0;
+        let total = 0;
+
+        radios.forEach(r => {
+            const cedula = r.name.replace('asist_', '');
+            registros.push({
+                id_sesion: parseInt(sesionActivaId),
+                cedula_asambleista: cedula,
+                estado_asistencia: r.value
+            });
+            total++;
+            if (r.value === 'Presente') presentes++;
+        });
+
+        if (registros.length === 0) return alert("No hay asambleístas en la lista.");
+
+        // Upsert para poder re-pasar la lista si es necesario
+        const { error } = await supabaseCliente
+            .from('asistencia_sesiones')
+            .upsert(registros, { onConflict: 'id_sesion,cedula_asambleista' });
+
+        if (error) return alert("Error al guardar: " + error.message);
+
+        // Cálculo de quórum (50%+1 para mayoría simple)
+        const mitad = total / 2;
+        const hayQuorum = presentes > mitad;
+        const divResult = document.getElementById('resultadoQuorum');
+
+        if (hayQuorum) {
+            divResult.style.color = "green";
+            divResult.innerHTML = `✅ QUÓRUM ALCANZADO: ${presentes} de ${total} presentes. Se puede votar.`;
+
+            // Marcar la sesión como Realizada
+            await supabaseCliente.from('sesiones')
+                .update({ estado: 'Realizada' })
+                .eq('id_sesion', sesionActivaId);
+        } else {
+            divResult.style.color = "red";
+            divResult.innerHTML = `❌ SIN QUÓRUM: Solo ${presentes} de ${total} presentes. No se puede votar (se necesitan más de ${Math.floor(mitad)}).`;
+        }
+    });
+
+    // ---- ISSUE 12: INICIAR VOTACIÓN NOMINAL ----
+    document.getElementById('formVotacion').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id_sesion = parseInt(document.getElementById('selectSesionVotacion').value);
+        const descripcion = document.getElementById('descVotacion').value.trim();
+
+        if (!id_sesion) return alert("Seleccione una sesión.");
+
+        // Crear la votación en BD
+        const { data, error } = await supabaseCliente
+            .from('votaciones')
+            .insert([{ id_sesion, descripcion }])
+            .select()
+            .single();
+
+        if (error) return alert("Error al crear votación: " + error.message);
+        votacionActivaId = data.id_votacion;
+
+        document.getElementById('descVotacionActual').innerText = descripcion;
+
+        // Cargar los presentes en esa sesión para registrar su voto
+        const { data: presentes } = await supabaseCliente
+            .from('asistencia_sesiones')
+            .select('cedula_asambleista, asambleistas(nombre)')
+            .eq('id_sesion', id_sesion)
+            .eq('estado_asistencia', 'Presente');
+
+        const listaVotos = document.getElementById('listaVotos');
+        listaVotos.innerHTML = "";
+
+        if (!presentes || presentes.length === 0) {
+            listaVotos.innerHTML = "<p>No hay asambleístas presentes registrados en esta sesión. Pase lista primero.</p>";
+        } else {
+            presentes.forEach(p => {
+                const cedula = p.cedula_asambleista;
+                const nombre = p.asambleistas?.nombre || cedula;
+                listaVotos.innerHTML += `
+                    <div style="margin-bottom:8px;">
+                        <strong>${nombre}</strong>:
+                        <label><input type="radio" name="voto_${cedula}" value="A Favor"> A Favor</label>
+                        <label><input type="radio" name="voto_${cedula}" value="En Contra" checked> En Contra</label>
+                        <label><input type="radio" name="voto_${cedula}" value="Abstención"> Abstención</label>
+                    </div>
+                `;
+            });
+        }
+
+        document.getElementById('panelVotacion').style.display = "block";
+        document.getElementById('resultadoVotacion').innerHTML = "";
+        document.getElementById('formVotacion').reset();
+    });
+
+    // ---- ISSUE 12: REGISTRAR VOTOS Y VER RESULTADO ----
+    document.getElementById('btnRegistrarVotos').addEventListener('click', async () => {
+        const votosSeleccionados = document.querySelectorAll('#listaVotos input[type=radio]:checked');
+        const insertar = [];
+
+        votosSeleccionados.forEach(r => {
+            const cedula = r.name.replace('voto_', '');
+            insertar.push({
+                id_votacion: votacionActivaId,
+                cedula_asambleista: cedula,
+                voto: r.value
+            });
+        });
+
+        if (insertar.length === 0) return alert("No hay votos que registrar.");
+
+        // Insertar votos (el trigger en BD calculará el resultado automáticamente)
+        const { error } = await supabaseCliente.from('votos_nominales').insert(insertar);
+        if (error) return alert("Error al registrar votos: " + error.message);
+
+        // Consultar resultado final
+        const { data: votacion } = await supabaseCliente
+            .from('votaciones')
+            .select('resultado, votos_favor, votos_contra, votos_abstenc')
+            .eq('id_votacion', votacionActivaId)
+            .single();
+
+        const div = document.getElementById('resultadoVotacion');
+        const color = votacion.resultado === 'Aprobado' ? 'green' : 'red';
+        const icono = votacion.resultado === 'Aprobado' ? '✅' : '❌';
+
+        div.style.borderLeftColor = color;
+        div.style.color = color;
+        div.innerHTML = `
+            <strong>${icono} Resultado: ${votacion.resultado}</strong><br>
+            A Favor: ${votacion.votos_favor} | En Contra: ${votacion.votos_contra} | Abstenciones: ${votacion.votos_abstenc}<br>
+            <small style="color:#555;">Validación: Mayoría Simple (50%+1). Gana quien tenga más votos a favor que en contra.</small>
+        `;
+    });
+
+    // Carga inicial
+    cargarComisiones();
+    cargarSesiones();
+</script>
+</body>
+</html>
