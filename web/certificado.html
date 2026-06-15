@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Certificados - Issue 17</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h2 { color: #2c3e50; margin-top: 0; }
+        .form-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background-color: #2980b9; }
+        .btn-print { background-color: #2ecc71; display: none; }
+        .btn-print:hover { background-color: #27ae60; }
+
+        #certificado-area {
+            display: none;
+            background: #fafafa;
+            border: 1px dashed #bdc3c7;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        pre {
+            font-family: 'Courier New', Courier, monospace; /* Estilor */
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap; /* Respeta los saltos de linea */
+            margin: 0;
+            color: #333;
+        }
+
+        /* Reglas de impresion */
+        @media print {
+    
+            body, .container { background: white; box-shadow: none; padding: 0; margin: 0; }
+            .no-print { display: none !important; }
+            #certificado-area { 
+                display: block !important; 
+                border: none; 
+                padding: 0; 
+                margin: 0; 
+            }
+            pre { font-size: 12pt; } 
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="no-print">
+        <h2>Emisión Oficial de Certificados</h2>
+        <p>Ingrese la cédula del asambleísta para consolidar su hoja de vida en texto plano.</p>
+        
+        <div class="form-group">
+            <input type="text" id="cedula" placeholder="Ej: 1712345678" required>
+            <button onclick="generarCertificado()">Generar Certificado</button>
+        </div>
+        
+        <div id="loading" style="display: none; color: #7f8c8d;">Procesando datos en la BD...</div>
+        <button id="btnPrint" class="btn-print" onclick="window.print()"> Guardar como PDF / Imprimir</button>
+    </div>
+
+    <div id="certificado-area">
+        <pre id="contenido-texto"></pre>
+    </div>
+</div>
+
+<script>
+    // 2. CONFIGURACIÓN DE TU SUPABASE
+    // Reemplaza esto con las credenciales reales de tu proyecto
+    const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
+
+    // Inicializar el cliente
+    const supabase =  supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function generarCertificado() {
+        const cedulaInput = document.getElementById('cedula').value.trim();
+        const loadingDiv = document.getElementById('loading');
+        const certificadoArea = document.getElementById('certificado-area');
+        const contenidoTexto = document.getElementById('contenido-texto');
+        const btnPrint = document.getElementById('btnPrint');
+
+        if (!cedulaInput) {
+            alert('Por favor, ingrese una cédula.');
+            return;
+        }
+
+        // Mostrar estado de carga
+        loadingDiv.style.display = 'block';
+        certificadoArea.style.display = 'none';
+        btnPrint.style.display = 'none';
+
+        try {
+            // 3. Llamada directa a la función RPC 
+            const { data, error } = await supabase
+                .rpc('generar_certificado_asambleista', { p_cedula: cedulaInput })
+                .single();
+
+            if (error) throw error;
+
+            // Inyectar el texto plano estructurado que dio PostgreSQL
+            contenidoTexto.textContent = data.contenido_certificado;
+            
+            // Mostrar resultados y botón de impresion
+            certificadoArea.style.display = 'block';
+            btnPrint.style.display = 'inline-block';
+
+        } catch (err) {
+            console.error(err);
+            alert('Error al generar certificado: ' + err.message);
+        } finally {
+            loadingDiv.style.display = 'none';
+        }
+    }
+</script>
+
+</body>
+</html>
