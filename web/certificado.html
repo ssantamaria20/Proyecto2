@@ -15,8 +15,6 @@
         .btn-download { background-color: #28a745; display: none; }
         .btn-download:hover { background-color: #218838; }
         #resultado { margin-top: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #ddd; white-space: pre-wrap; font-family: monospace; }
-        
-        /* Estilos de las alertas críticas */
         #pantalla-error { background: #ffebee; color: #c62828; border: 2px solid #ef5350; padding: 15px; margin-bottom: 20px; display: none; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
@@ -25,7 +23,7 @@
     <div id="pantalla-error"></div>
 
     <h2>Emisión de Certificado de Hoja de Vida</h2>
-    <p>Ingrese la cédula del asambleísta para generar y descargar el documento oficial.</p>
+    <p>Ingrese la cédula del asambleísta para generar el documento oficial.</p>
 
     <form id="formCertificado">
         <div class="form-group">
@@ -39,33 +37,14 @@
     <div id="resultado" style="display: none;"></div>
 
     <script>
-        // Capturador de errores global: Si el script explota, lo muestra en la página
-        window.onerror = function(message, source, lineno) {
-            const contenedorError = document.getElementById("pantalla-error");
-            contenedorError.innerText = "🚨 Error crítico del sistema: " + message + " (Línea " + lineno + ")";
-            contenedorError.style.display = "block";
-            return true;
-        };
 
-        // 1. CONFIGURACIÓN DE CREDENCIALES (⚠️ ¡Pon tus datos reales aquí!)
-        const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
-        const SUPABASE_ANON_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq"; 
-
-        let supabase = null;
         let textoCertificadoGlobal = "";
         let folioGlobal = "";
 
-        // Validar carga de librería al iniciar la página
-        if (!window.supabase) {
-            throw new Error("La librería de Supabase no se cargó. Verifica que tengas internet o que un bloqueador de anuncios no la esté tapando.");
-        } else {
-            // Inicializar cliente si la librería existe
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        }
 
-        // Escuchar el envío del formulario de manera segura
         document.getElementById("formCertificado").addEventListener("submit", async function(event) {
-            event.preventDefault(); // Detiene el reinicio de la página inmediatamente
+      
+            event.preventDefault(); 
             
             const cedulaInput = document.getElementById("cedula").value.trim();
             const btnGenerar = document.getElementById("btnGenerar");
@@ -73,14 +52,25 @@
             const btnDescargar = document.getElementById("btnDescargar");
             const contenedorError = document.getElementById("pantalla-error");
 
-            // Limpiar estados previos
+
             contenedorError.style.display = "none";
             divResultado.style.display = "none";
             btnDescargar.style.display = "none";
 
-            // Validar que cambiaste las credenciales por defecto
-            if (SUPABASE_URL.includes("TU_PROYECTO_REAL") || SUPABASE_ANON_KEY.includes("tu_anon_key")) {
-                contenedorError.innerText = "⚠️ Alerta: No has cambiado las credenciales de ejemplo (SUPABASE_URL / SUPABASE_ANON_KEY) en las líneas 43 y 44 del código.";
+   
+            if (!window.supabase) {
+                contenedorError.innerText = " Error: La librería de Supabase no pudo cargarse en tu navegador. Revisa si tienes internet o si extensiones tipo AdBlock están bloqueando scripts externos.";
+                contenedorError.style.display = "block";
+                return;
+            }
+
+           
+            const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
+            const SUPABASE_ANON_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq"; 
+
+   
+            if (SUPABASE_URL.includes("TU_PROYECTO_REAL")) {
+                contenedorError.innerText = " Configuración pendiente: Te falta poner tu URL y tu Anon Key reales de Supabase en el código (líneas 54 y 55).";
                 contenedorError.style.display = "block";
                 return;
             }
@@ -89,7 +79,10 @@
             btnGenerar.disabled = true;
 
             try {
-                // Llamar a la base de datos
+                // Conexión en caliente
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+                // Llamada a tu RPC
                 const { data, error } = await supabase.rpc('generar_certificado_asambleista', {
                     p_cedula: cedulaInput
                 });
@@ -97,24 +90,23 @@
                 if (error) throw error;
 
                 if (!data || data.length === 0) {
-                    throw new Error("No se encontró ningún asambleísta con esa cédula en la base de datos.");
+                    throw new Error("No existe ningún registro con esa cédula.");
                 }
 
                 const registro = data[0];
                 textoCertificadoGlobal = registro.contenido_certificado;
                 folioGlobal = registro.folio;
 
-                // Mostrar el certificado en pantalla
-                divResultado.style.color = "black";
+                // Pintar texto plano estructurado
                 divResultado.innerText = textoCertificadoGlobal;
                 divResultado.style.display = "block";
                 
-                // Mostrar botón de descarga
+                // Mostrar botón para bajar el .txt
                 btnDescargar.style.display = "inline-block";
 
             } catch (err) {
                 console.error(err);
-                contenedorError.innerText = "❌ Error en la consulta: " + (err.message || "Problema de conexión con Supabase.");
+                contenedorError.innerText = " Error en consulta: " + (err.message || "No se pudo conectar al servidor.");
                 contenedorError.style.display = "block";
             } finally {
                 btnGenerar.innerText = "Generar Certificado";
@@ -122,19 +114,15 @@
             }
         });
 
-        // Función nativa para forzar la descarga del archivo .txt
         function descargarTexto() {
             if (!textoCertificadoGlobal) return;
-
             const blob = new Blob([textoCertificadoGlobal], { type: "text/plain;charset=utf-8" });
             const url = window.URL.createObjectURL(blob);
-            
             const a = document.createElement("a");
             a.href = url;
             a.download = `${folioGlobal}.txt`;
             document.body.appendChild(a);
             a.click();
-            
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         }
