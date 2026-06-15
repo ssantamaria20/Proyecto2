@@ -37,8 +37,7 @@
     <script>
         const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
         const SUPABASE_ANON_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq"; 
-
-        const supabase = @supabase/supabase-js.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let textoCertificadoGlobal = "";
         let folioGlobal = "";
@@ -51,7 +50,6 @@
             const btnGenerar = document.getElementById("btnGenerar");
             const divResultado = document.getElementById("resultado");
             const btnDescargar = document.getElementById("btnDescargar");
-
 
             btnGenerar.innerText = "Procesando...";
             btnGenerar.disabled = true;
@@ -66,26 +64,23 @@
                 if (error) throw error;
 
                 if (!data || data.length === 0) {
-                    throw new Error("No se recibieron datos del servidor.");
+                    throw new Error("No se encontraron registros para esa cédula.");
                 }
-
 
                 const registro = data[0];
                 textoCertificadoGlobal = registro.contenido_certificado;
                 folioGlobal = registro.folio;
 
-
                 divResultado.className = "";
                 divResultado.innerText = textoCertificadoGlobal;
                 divResultado.style.display = "block";
                 
-
                 btnDescargar.style.display = "inline-block";
 
             } catch (err) {
                 console.error("Error detectado:", err);
                 divResultado.className = "error";
-                divResultado.innerText = "❌ Error: " + (err.message || err.details || "No se pudo conectar.");
+                divResultado.innerText = "❌ " + (err.message || "Error al conectar con Supabase.");
                 divResultado.style.display = "block";
             } finally {
                 btnGenerar.innerText = "Generar Certificado";
@@ -93,18 +88,18 @@
             }
         }
 
-
         function descargarTexto() {
             if (!textoCertificadoGlobal) return;
+
             const blob = new Blob([textoCertificadoGlobal], { type: "text/plain;charset=utf-8" });
             const url = window.URL.createObjectURL(blob);
+            
             const a = document.createElement("a");
             a.href = url;
-            a.download = `${folioGlobal}.txt`; 
+            a.download = `${folioGlobal}.txt`;
             document.body.appendChild(a);
-            a.click(); 
+            a.click();
             
-
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         }
