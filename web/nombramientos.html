@@ -1,0 +1,76 @@
+ //Issue 15 preelimianr, actualmente en desuso
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Nombramientos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+    <h1>Control de Nombramientos y Vigencia</h1>
+    
+    <form id="formNombramiento">
+        <label>Cédula del Asambleísta:</label><br>
+        <input type="text" id="cedulaAsambleista" placeholder="Ej: 112340567" required><br><br>
+
+        <label>Puesto / Cargo:</label><br>
+        <select id="puestoCargo" required>
+            <option value="">-- Seleccione un puesto --</option>
+            <option value="Presidente">Presidente</option>
+            <option value="Vicepresidente">Vicepresidente</option>
+            <option value="Secretario">Secretario</option>
+            <option value="Prosecretario">Prosecretario</option>
+            <option value="Vocal">Vocal</option>
+        </select><br><br>
+
+        <button type="submit">Asignar Puesto</button>
+    </form>
+
+    <script>
+        // CONFIGURACIÓN DE CREDENCIALES
+        const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
+        const SUPABASE_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
+
+        // Cambio de nombre aquí también
+        const supabaseCliente = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        document.getElementById('formNombramiento').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const cedula = document.getElementById('cedulaAsambleista').value;
+            const puesto = document.getElementById('puestoCargo').value;
+
+            try {
+                // LÓGICA ISSUE 15: Apagar el puesto anterior usando el cliente ajustado
+                const { error: errorApagar } = await supabaseCliente
+                    .from('nombramientos')
+                    .update({ activo: false })
+                    .eq('puesto', puesto)
+                    .eq('activo', true);
+
+                if (errorApagar) throw errorApagar;
+
+                // Insertar el nuevo nombramiento
+                const { data, error: errorInsertar } = await supabaseCliente
+                    .from('nombramientos')
+                    .insert([
+                        { cedula_asambleista: cedula, puesto: puesto }
+                    ]);
+
+                if (errorInsertar) throw errorInsertar;
+
+                alert(`Fue exitoso, Se asignó el puesto de ${puesto} y se desactivó el nombramiento anterior.`);
+                document.getElementById('formNombramiento').reset();
+
+            } catch (error) {
+                console.error(error);
+                alert("Error: " + error.message);
+            }
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compilador de Reglamentos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+    <h1>Módulo de Reglamentos y Versionamiento Historico</h1>
+    
+    <h2>1. Registrar / Reformar Elemento Normativo</h2>
+    <form id="formReglamento">
+        <label>Identificador Único del Artículo/Inciso:</label><br>
+        <input type="text" id="idCoherente" placeholder="Ej: ART-12" required><br><br>
+
+        <label>Nombre del Elemento:</label><br>
+        <input type="text" id="nombre" placeholder="Ej: Artículo 12: De las votaciones" required><br><br>
+
+        <label>Contenido Textual:</label><br>
+        <textarea id="contenido" placeholder="Escriba la norma aquí..."></textarea><br><br>
+
+        <label>ID del Elemento Padre (Dejar vacío si es un Título Raíz):</label><br>
+        <input type="number" id="idPadre" placeholder="Ej: 1"><br><br>
+
+        <label>Número de Resolución Legal Oficial:</label><br>
+        <input type="text" id="resolucion" placeholder="Ej: AIR-RES-2026-005" required><br><br>
+
+        <button type="submit">Publicar / Reformar Elemento</button>
+    </form>
+
+    <hr>
+
+    <h2>2. Compilador Vigente </h2>
+    <button id="btnCargarArbol">🌳 Cargar Estructura Organizacional (Filtro Activos)</button>
+    
+    <div id="arbolContenedor" style="background: #f4f4f4; padding: 15px; margin-top: 15px; font-family: monospace;">
+        Haga clic en el botón para renderizar la estructura...
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://bwapdvxxruxoqxeoajva.supabase.co"; 
+        const SUPABASE_KEY = "sb_publishable_ji7OIxDlNufPR11bW28yRw_N5eXwVGq";
+
+        const supabaseCliente = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        document.getElementById('formReglamento').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const idCoherente = document.getElementById('idCoherente').value;
+            const nombre = document.getElementById('nombre').value;
+            const contenido = document.getElementById('contenido').value;
+            const idPadre = document.getElementById('idPadre').value;
+            const resolucion = document.getElementById('resolucion').value;
+
+            try {
+    
+                const { error } = await supabaseCliente
+                    .from('reglamentos')
+                    .insert([{
+                        id_coherente_articulo: idCoherente,
+                        nombre: nombre,
+                        contenido: contenido || null,
+                        id_padre: idPadre ? parseInt(idPadre) : null,
+                        num_resolucion: resolucion,
+                        estado_vigencia: 'Activo'
+                    }]);
+
+                if (error) throw error;
+
+                alert("Normativa procesada, Si era una reforma, la versión anterior fue enviada al Historial.");
+                document.getElementById('formReglamento').reset();
+                cargarArbolVigente();
+
+            } catch (error) {
+                console.error(error);
+                alert("Error en el control de versionamiento: " + error.message);
+            }
+        });
+
+
+        async function cargarArbolVigente() {
+            const contenedor = document.getElementById('arbolContenedor');
+            contenedor.innerHTML = "Construyendo jerarquía...";
+
+            try {
+
+                const { data: elementos, error } = await supabaseCliente
+                    .from('reglamentos')
+                    .select('*')
+                    .eq('estado_vigencia', 'Activo')
+                    .is('fecha_fin_vigencia', null);
+
+                if (error) throw error;
+                if (elementos.length === 0) {
+                    contenedor.innerHTML = "No hay normativas vigentes en el sistema.";
+                    return;
+                }
+
+                const raices = [];
+                const mapeo = {};
+
+                elementos.forEach(el => {
+                    mapeo[el.id_reglamento] = { ...el, hijos: [] };
+                });
+
+                elementos.forEach(el => {
+                    const elConHijos = mapeo[el.id_reglamento];
+                    if (el.id_padre && mapeo[el.id_padre]) {
+                        mapeo[el.id_padre].hijos.push(elConHijos);
+                    } else {
+                        raices.push(elConHijos);
+                    }
+                });
+
+                function pintarNodo(nodo, nivel) {
+                    const sangria = "&nbsp;".repeat(nivel * 6);
+                    let html = `<div>${sangria}📄 [ID: ${nodo.id_reglamento}] <strong>${nodo.nombre}</strong> <small style="color:blue;">(${nodo.num_resolucion})</small></div>`;
+                    if(nodo.contenido) {
+                        html += `<div>${sangria}<span style="color:#555; font-style:italic;">"${nodo.contenido}"</span></div>`;
+                    }
+                    nodo.hijos.forEach(hijo => {
+                        html += pintarNodo(hijo, nivel + 1);
+                    });
+                    return html;
+                }
+
+                let arbolFinalHTML = "";
+                raices.forEach(raiz => {
+                    arbolFinalHTML += pintarNodo(raiz, 0);
+                });
+
+                contenedor.innerHTML = arbolFinalHTML;
+
+            } catch (error) {
+                console.error(error);
+                contenedor.innerHTML = "<span style='color:red;'>Error al mapear árbol: " + error.message + "</span>";
+            }
+        }
+
+        document.getElementById('btnCargarArbol').addEventListener('click', cargarArbolVigente);
+    </script>
+</body>
+</html>
